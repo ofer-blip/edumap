@@ -95,7 +95,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ schools, onMarkerClick, sel
   }, [schools, selectedId, onMarkerClick]);
 
   // הגדרת סטייל ישיר להבטחת תצוגה - זה התיקון הקריטי למפה הלבנה
-return <div ref={mapContainerRef} style={{ height: '600px', width: '100%' }} />;;
+return <div ref={mapContainerRef} style={{ height: '700px', width: '100%', position: 'relative' }} />;
 };
 
 export default MapComponent;
