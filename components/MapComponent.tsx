@@ -1,112 +1,101 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { School } from '../types';
-import { X, Send, Sparkles, User, Loader2, Bot } from 'lucide-react';
+import { COLORS, TYPE_ICONS, TYPE_LABELS } from '../constants';
 
-// --- כאן מדביקים את המפתח שהוצאת מ-AI STUDIO ---
-const GEMINI_API_KEY = "AIzaSyDdj-P9UNFFu5f3PtgpbEVZwHN6tGkbpz0"; 
-
-interface AIAdvisorModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface MapComponentProps {
   schools: School[];
+  onMarkerClick: (id: string) => void;
+  selectedId: string | null;
 }
 
-const AIAdvisorModal: React.FC<AIAdvisorModalProps> = ({ isOpen, onClose, schools }) => {
-  const [messages, setMessages] = useState<{role: string, content: string}[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+const MapComponent: React.FC<MapComponentProps> = ({ schools, onMarkerClick, selectedId }) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markersRef = useRef<Record<string, any>>({});
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, loading]);
+    const L = (window as any).L;
+    if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
-  if (!isOpen) return null;
+    // אתחול המפה עם הגדרות לתיקון תצוגה
+    const map = L.map(mapContainerRef.current, {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([31.5, 34.9], 8);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+    L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map);
 
-    const userMsg = input.trim();
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
-    setInput('');
-    setLoading(true);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-    try {
-      // הכנת רשימת בתי הספר עבור ה-AI כדי שיכיר אותם
-      const schoolsContext = schools.map(s => `${s.name} ב${s.city} (סוג: ${s.type})`).join(', ');
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `אתה יועץ חינוכי מומחה לאפליקציית "נתיבים". אלו בתי הספר שקיימים במערכת: ${schoolsContext}. 
-                     ענה בעברית בצורה ידידותית. השאלה של המשתמש: ${userMsg}`
-            }]
-          }]
-        })
+    mapInstanceRef.current = map;
+
+    // תיקון קריטי: רענון המפה לאחר חצי שנייה כדי לוודא שהיא נצבעת נכון
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 500);
+  }, []);
+
+  useEffect(() => {
+    const L = (window as any).L;
+    if (!L || !mapInstanceRef.current) return;
+
+    // ניקוי סמנים קיימים
+    Object.values(markersRef.current).forEach((m: any) => m.remove());
+    markersRef.current = {};
+
+    schools.forEach(school => {
+      const colorClass = COLORS[school.type].replace('bg-', '');
+      const iconHtml = `
+        <div class="relative group cursor-pointer">
+          <div class="w-8 h-8 rounded-full border-2 border-white shadow-xl flex items-center justify-center transition-transform hover:scale-125 bg-${colorClass} ${selectedId === school.id ? 'ring-4 ring-blue-300 scale-125' : ''}">
+            <i class="fas ${TYPE_ICONS[school.type]} text-white text-xs"></i>
+          </div>
+        </div>
+      `;
+
+      const icon = L.divIcon({
+        html: iconHtml,
+        className: 'custom-div-icon',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
       });
 
-      const data = await response.json();
-      const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "מצטער, לא הצלחתי לענות כרגע.";
+      const marker = L.marker([school.lat, school.lng], { icon })
+        .addTo(mapInstanceRef.current)
+        .on('click', () => onMarkerClick(school.id));
       
-      setMessages(prev => [...prev, { role: 'model', content: aiText }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'model', content: "שגיאה בחיבור ל-AI. וודא שהזנת מפתח API תקין." }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-blue-900/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col h-[80vh] overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Sparkles className="w-6 h-6 text-blue-600" />
-            <h2 className="font-bold text-gray-900">יועץ פדגוגי חכם (AI)</h2>
+      const popupContent = `
+        <div class="p-3 text-right" dir="rtl">
+          <h3 class="font-bold text-blue-900">${school.name}</h3>
+          <p class="text-xs text-gray-500 mb-2">${school.city}</p>
+          <div class="flex items-center gap-1.5 mb-3">
+             <span class="px-2 py-0.5 rounded text-[10px] font-bold text-white bg-${colorClass}">${TYPE_LABELS[school.type]}</span>
+             <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600">${school.grades}</span>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X /></button>
+          <div class="flex flex-col gap-2">
+            <a href="https://waze.com/ul?q=${encodeURIComponent(school.name + ' ' + school.city)}" target="_blank" class="bg-blue-600 text-white py-2 px-2 rounded text-xs text-center font-bold">ניווט בוויז</a>
+            <a href="https://www.google.com/search?q=${encodeURIComponent(school.name + ' ' + school.city)}" target="_blank" class="border border-gray-300 py-2 px-2 rounded text-xs text-center font-bold text-gray-700">חיפוש בגוגל</a>
+          </div>
         </div>
+      `;
 
-        {/* Chat */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 scroller">
-          {messages.length === 0 && (
-            <div className="text-center p-8 text-gray-400">
-              <Bot className="w-12 h-12 mx-auto mb-2 opacity-20" />
-              <p>שלום! שאל אותי כל דבר על בתי הספר במפה.</p>
-            </div>
-          )}
-          {messages.map((msg, idx) => (
-            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-3 rounded-xl ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white border text-gray-800'}`}>
-                {msg.content}
-              </div>
-            </div>
-          ))}
-          {loading && <div className="text-xs text-gray-400 animate-pulse">היועץ חושב...</div>}
-        </div>
+      marker.bindPopup(popupContent, { className: 'custom-popup' });
+      markersRef.current[school.id] = marker;
+    });
 
-        {/* Input */}
-        <div className="p-4 border-t flex gap-2">
-          <input 
-            type="text" 
-            className="flex-1 border rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="כתוב הודעה..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-          />
-          <button onClick={handleSend} className="bg-blue-600 text-white p-2 rounded-xl"><Send /></button>
-        </div>
-      </div>
-    </div>
-  );
+    if (selectedId && markersRef.current[selectedId]) {
+      const school = schools.find(s => s.id === selectedId);
+      if (school) {
+        mapInstanceRef.current.flyTo([school.lat, school.lng], 14);
+        markersRef.current[selectedId].openPopup();
+      }
+    }
+  }, [schools, selectedId, onMarkerClick]);
+
+  // הגדרת סטייל ישיר להבטחת תצוגה
+  return <div ref={mapContainerRef} style={{ height: '100%', minHeight: '500px', width: '100%' }} />;
 };
 
-export default AIAdvisorModal;
+export default MapComponent;
