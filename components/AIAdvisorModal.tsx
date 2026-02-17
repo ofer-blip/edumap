@@ -4,8 +4,6 @@ import { X, Send, Sparkles, User, Loader2, Bot } from 'lucide-react';
 
 // --- כאן מדביקים את המפתח שהוצאת מ-AI STUDIO ---
 const GEMINI_API_KEY = "AIzaSyCXEaimivhM0GaTuUs6-OT1FuYWKwn8aUw"; 
-
-
 interface AIAdvisorModalProps {
   isOpen: boolean;
   onClose: () => void;
