@@ -1,0 +1,7 @@
+{
+  "name": "Netivim 360 - The Unique Education Map",
+  "description": "A comprehensive interactive map and database of unique educational institutions in Israel, featuring AI pedagogical consulting and real-time data management.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
